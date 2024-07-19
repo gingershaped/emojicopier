@@ -178,13 +178,13 @@ class EmojiCopier(Client):
             embeds.append(Embed(
                 color=Color.brand_green(),
                 title=f"{len(body_emojis)} {"emojis" if len(body_emojis) != 1 else "emoji"} in message content",
-                description=" ".join([f"{str(emoji)} [{emoji.name}]({emoji.url})" for emoji in body_emojis])
+                description="\n".join([f"- {str(emoji)} [{emoji.name}]({emoji.url})" for emoji in body_emojis])
             ))
         if len(reaction_emojis):
             embeds.append(Embed(
                 color=Color.brand_green(),
                 title=f"{len(reaction_emojis)} {"reactions" if len(reaction_emojis) != 1 else "reaction"}",
-                description=" ".join([f"{str(emoji)} [{emoji.name}]({emoji.url})" for emoji in reaction_emojis])
+                description="\n".join([f"- {str(emoji)} [{emoji.name}]({emoji.url})" for emoji in reaction_emojis])
             ))
         if len(message.stickers):
             embeds.append(Embed(
