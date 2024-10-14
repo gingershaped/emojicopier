@@ -251,17 +251,17 @@ class EmojiCopier(Client):
             )
         )
 
-        self.tree.add_command(
-            Command(
-                name="copy",
-                description="Copy expressions from this server",
-                callback=self.copy_server_expressions,
-                allowed_contexts=AppCommandContext(
-                    guild=True, dm_channel=False, private_channel=False
-                ),
-                allowed_installs=AppInstallationType(guild=True, user=True),
-            )
-        )
+        # self.tree.add_command(
+        #     Command(
+        #         name="copy",
+        #         description="Copy expressions from this server",
+        #         callback=self.copy_server_expressions,
+        #         allowed_contexts=AppCommandContext(
+        #             guild=True, dm_channel=False, private_channel=False
+        #         ),
+        #         allowed_installs=AppInstallationType(guild=True, user=True),
+        #     )
+        # )
         self.tree.add_command(
             ContextMenu(
                 name="Copy expressions",
