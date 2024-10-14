@@ -281,7 +281,7 @@ class EmojiCopier(Client):
             await interaction.response.send_message(
                 embed=Embed(
                     color=Color.brand_red(),
-                    title="You do not have the Create Expressions permission in any servers you are in with this bot.",
+                    title="You do not have the Create Expressions permission in any servers you share with this bot.",
                 ),
                 view=View().add_item(Button(style=ButtonStyle.link, label="Invite Ideograbber to a server!", url=oauth_url(cast(int, self.application_id)))),
                 ephemeral=True
