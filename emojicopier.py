@@ -21,6 +21,7 @@ from discord import (
     Message,
     Emoji,
     PartialEmoji,
+    Permissions,
     Role,
     SelectOption,
     ButtonStyle,
@@ -204,6 +205,7 @@ class ErrorHandlingCommandTree(CommandTree):
 
 class EmojiCopier(Client):
     EMOJI_REGEX = re.compile(r"<(?P<anim>a)?:(?P<name>\w{2,}):(?P<id>\d+)>")
+    permissions = Permissions(create_expressions=True, manage_expressions=True)
 
     def __init__(self):
         intents = Intents.default()
@@ -246,6 +248,17 @@ class EmojiCopier(Client):
                 callback=self.extract_role_icon,
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=False, private_channel=False
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
+        self.tree.add_command(
+            Command(
+                name="install",
+                description="Share a link to install Ideograbber!",
+                callback=self.install,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
                 ),
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
@@ -303,6 +316,11 @@ class EmojiCopier(Client):
 
     def format_asset_link(self, asset: Asset):
         return f"[{urlparse(asset.url).path.split("/")[-1]}]({asset.url})"
+    
+    async def install(self, interaction: Interaction):
+        await interaction.response.send_message(
+            f"[click here to WIN BIG]({oauth_url(cast(int, self.application_id), permissions=self.permissions)})"
+        )
 
     async def extract_expressions(self, interaction: Interaction, message: Message):
         body_emojis = self.emojis_in_string(message.content)
@@ -506,7 +524,7 @@ class EmojiCopier(Client):
                     Button(
                         style=ButtonStyle.link,
                         label="Invite Ideograbber to a server!",
-                        url=oauth_url(cast(int, self.application_id)),
+                        url=oauth_url(cast(int, self.application_id), permissions=self.permissions),
                     )
                 ),
                 ephemeral=True,
@@ -566,12 +584,11 @@ class EmojiCopier(Client):
                         Button(
                             style=ButtonStyle.link,
                             label="Invite Ideograbber to a server!",
-                            url=oauth_url(cast(int, self.application_id)),
+                            url=oauth_url(cast(int, self.application_id), permissions=self.permissions),
                         )
                     ),
                     ephemeral=True,
                 )
-
 
 if __name__ == "__main__":
     with open("config.toml", "rb") as f:
