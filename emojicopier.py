@@ -51,7 +51,6 @@ password_strengths = (
     ("Excellent", Color.brand_green()),
 )
 
-
 class ExpressionLocation(Enum):
     MESSAGE = None
     REACTION = "Reaction"
