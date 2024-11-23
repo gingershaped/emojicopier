@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 "discord.py" = "^2.4.0"
+zxcvbn = "^4.4.28"
 
 
 [build-system]

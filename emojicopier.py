@@ -38,8 +38,17 @@ from discord.app_commands import (
 from discord.ui import View, Select, Button, button
 from discord.utils import oauth_url
 
+from zxcvbn import zxcvbn
+
 Expression = Emoji | PartialEmoji | GuildSticker
 
+password_strengths = (
+    ("Terrible", Color.brand_red()),
+    ("Poor", Color.brand_red()),
+    ("Okay", Color.yellow()),
+    ("Good", Color.brand_green()),
+    ("Excellent", Color.brand_green()),
+)
 
 class ExpressionLocation(Enum):
     MESSAGE = None
@@ -234,6 +243,16 @@ class EmojiCopier(Client):
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
+        self.tree.add_command(
+            ContextMenu(
+                name="Check password strength",
+                callback=self.check_password_strength,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
         # self.tree.add_command(Command(
         #     name="server-assets",
         #     description="Extract server branding assets",
@@ -320,6 +339,19 @@ class EmojiCopier(Client):
     async def install(self, interaction: Interaction):
         await interaction.response.send_message(
             f"[click here to WIN BIG]({oauth_url(cast(int, self.application_id), permissions=self.permissions)})"
+        )
+
+    async def check_password_strength(self, interaction: Interaction, message: Message):
+        results = zxcvbn(message.content)
+        await interaction.response.send_message(
+            embed=Embed(
+                color=password_strengths[results["score"]][1],
+                title=f"Password strength: {password_strengths[results["score"]][0]}",
+            ).add_field(
+                name="Approximate number of guesses", value=results["guesses"], inline=False
+            ).add_field(
+                name="Worst-case time to crack", value=results["crack_times_display"]["offline_fast_hashing_1e10_per_second"], inline=False
+            )
         )
 
     async def extract_expressions(self, interaction: Interaction, message: Message):
