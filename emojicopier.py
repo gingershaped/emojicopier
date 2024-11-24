@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from discord import (
     Asset,
+    Attachment,
     Client,
     Color,
     Embed,
@@ -58,7 +59,13 @@ class ExpressionLocation(Enum):
     BIO = "Bio"
 
 
-class ExpressionSelect(Select):
+class BaseSelect[T](Select):
+    def __init__(self, **kwargs):
+        self.selected: list[tuple[T, ExpressionLocation]] = []
+        super().__init__(**kwargs)
+
+
+class ExpressionSelect(BaseSelect[Expression]):
     def __init__(
         self, *, expressions: Sequence[tuple[Expression, ExpressionLocation]], **kwargs
     ):
@@ -83,10 +90,29 @@ class ExpressionSelect(Select):
             expression.id: (expression, location)
             for expression, location in expressions
         }
-        self.selected: list[tuple[Expression, ExpressionLocation]] = []
 
     async def callback(self, interaction: Interaction):
         self.selected = [self._expressions[int(id)] for id in self.values]
+        await interaction.response.defer()
+
+
+class AttachmentSelect(BaseSelect[Attachment]):
+    def __init__(self, attachments: Sequence[Attachment], **kwargs):
+        self._attachments = {attachment.id: attachment for attachment in attachments}
+        super().__init__(
+            options=[
+                SelectOption(label=attachment.filename, value=str(attachment.id))
+                for attachment in attachments
+            ],
+            max_values=len(attachments),
+            **kwargs,
+        )
+
+    async def callback(self, interaction):
+        self.selected = [
+            (self._attachments[int(id)], ExpressionLocation.MESSAGE)
+            for id in self.values
+        ]
         await interaction.response.defer()
 
 
@@ -113,24 +139,23 @@ class GuildSelect(Select):
         await interaction.response.defer()
 
 
-class CopyExpressionsView(View):
-    def __init__(
-        self,
-        client: Client,
-        expressions: Sequence[tuple[Expression, ExpressionLocation]],
-        guilds: list[Guild],
-    ):
-        super().__init__()
+class BaseCopyView[T](View):
+    def __init__(self, client: Client, select: BaseSelect[T], guilds: list[Guild]):
         self.client = client
         self.logger = getLogger("discord.expressioncopier")
-        self.expression_select = ExpressionSelect(
-            expressions=expressions, placeholder="Select expressions to copy", row=0
-        )
+        self.item_select = select
         self.guild_select = GuildSelect(
             guilds=guilds, placeholder="Select target servers", row=1
         )
-        self.add_item(self.expression_select)
+        super().__init__()
+        self.add_item(self.item_select)
         self.add_item(self.guild_select)
+
+    async def copy_sticker(self, item: T, guild: Guild, username: str) -> None:
+        raise NotImplementedError()
+
+    async def copy_emoji(self, item: T, guild: Guild, username: str) -> None:
+        raise NotImplementedError()
 
     @button(label="Copy", style=ButtonStyle.primary, row=2)
     async def on_copy(self, interaction: Interaction, button: Button):
@@ -140,34 +165,23 @@ class CopyExpressionsView(View):
             embed=Embed(color=Color.brand_green(), title="Copying expressions"),
             view=None,
         )
-        succeeded: list[tuple[Expression, Guild]] = []
-        failed: list[tuple[Expression, Guild, HTTPException]] = []
+        succeeded: list[tuple[T, Guild]] = []
+        failed: list[tuple[T, Guild, HTTPException]] = []
         for guild in self.guild_select.selected:
-            for expression, location in self.expression_select.selected:
+            for item, location in self.item_select.selected:
                 try:
                     if location == ExpressionLocation.STICKER:
-                        assert isinstance(expression, GuildSticker)
-                        await guild.create_sticker(
-                            name=expression.name,
-                            description=expression.description,
-                            emoji=expression.emoji,
-                            file=await expression.to_file(),
-                            reason=f"Copying sticker (requested by @{interaction.user.name})",
-                        )
+                        await self.copy_sticker(item, guild, interaction.user.name)
                     else:
-                        await guild.create_custom_emoji(
-                            name=expression.name,
-                            image=await expression.read(),
-                            reason=f"Copying emoji (requested by @{interaction.user.name})",
-                        )
+                        await self.copy_emoji(item, guild, interaction.user.name)
                 except HTTPException as e:
                     self.logger.warning(
-                        f"Failed to copy {expression} to {guild}", exc_info=True
+                        f"Failed to copy {item} to {guild}", exc_info=True
                     )
-                    failed.append((expression, guild, e))
+                    failed.append((item, guild, e))
                 else:
-                    self.logger.info(f"Copied {expression} to {guild}")
-                    succeeded.append((expression, guild))
+                    self.logger.info(f"Copied {item} to {guild}")
+                    succeeded.append((item, guild))
         embeds = []
         if len(succeeded):
             embeds.append(
@@ -197,6 +211,66 @@ class CopyExpressionsView(View):
         await (await interaction.original_response()).edit(embeds=embeds)
 
 
+class CopyExpressionsView(BaseCopyView[Expression]):
+    def __init__(
+        self,
+        client: Client,
+        expressions: Sequence[tuple[Expression, ExpressionLocation]],
+        guilds: list[Guild],
+    ):
+        super().__init__(
+            client,
+            ExpressionSelect(
+                expressions=expressions, placeholder="Select expressions to copy", row=0
+            ),
+            guilds,
+        )
+
+    async def copy_sticker(self, item, guild, username):
+        assert isinstance(item, GuildSticker)
+        await guild.create_sticker(
+            name=item.name,
+            description=item.description,
+            emoji=item.emoji,
+            file=await item.to_file(),
+            reason=f"Copying sticker (requested by @{username})",
+        )
+
+    async def copy_emoji(self, item, guild, username):
+        await guild.create_custom_emoji(
+            name=item.name,
+            image=await item.read(),
+            reason=f"Copying emoji (requested by @{username})",
+        )
+
+
+class CopyAttachmentsView(BaseCopyView[Attachment]):
+    def __init__(
+        self, client: Client, attachments: Sequence[Attachment], guilds: list[Guild]
+    ):
+        super().__init__(
+            client,
+            AttachmentSelect(
+                attachments, placeholder="Select attachments to upload", row=0
+            ),
+            guilds,
+        )
+
+    async def copy_emoji(self, item, guild, username):
+        name = item.filename
+        if (idx := name.rfind(".")) > 0:
+            name = name[:idx]
+        name = re.sub(r"\W", "_", name)
+        if len(name) < 2:
+            name = "_" + name
+
+        await guild.create_custom_emoji(
+            name=name,
+            image=await item.read(),
+            reason=f"Uploading emoji (requested by @{username})",
+        )
+
+
 class ErrorHandlingCommandTree(CommandTree):
     async def on_error(
         self, interaction: Interaction[Client], error: AppCommandError
@@ -210,6 +284,9 @@ class ErrorHandlingCommandTree(CommandTree):
             ephemeral=True,
         )
         return await super().on_error(interaction, error)
+
+
+VALID_ATTACHMENT_TYPES = {"image/gif", "image/jpeg", "image/png"}
 
 
 class EmojiCopier(Client):
@@ -298,6 +375,16 @@ class EmojiCopier(Client):
             ContextMenu(
                 name="Copy expressions",
                 callback=self.copy_expressions,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
+        self.tree.add_command(
+            ContextMenu(
+                name="Upload attachments as emoji",
+                callback=self.copy_attachments,
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=True, private_channel=True
                 ),
@@ -559,6 +646,45 @@ class EmojiCopier(Client):
                         url=oauth_url(cast(int, self.application_id), permissions=self.permissions),
                     )
                 ),
+                ephemeral=True,
+            )
+
+    async def copy_attachments(self, interaction: Interaction, message: Message):
+        attachments = [
+            attachment
+            for attachment in message.attachments
+            if attachment.content_type in VALID_ATTACHMENT_TYPES
+        ]
+        if len(attachments) == 0:
+            await interaction.response.send_message(
+                embed=Embed(
+                    color=Color.brand_red(),
+                    title="This message has no attached images.",
+                ),
+                ephemeral=True,
+            )
+            return
+        elegible_guilds = list(self.elegible_guilds_for_user(interaction.user))
+        if len(elegible_guilds) == 0:
+            await interaction.response.send_message(
+                embed=Embed(
+                    color=Color.brand_red(),
+                    title="You do not have the Create Expressions permission in any servers you share with this bot.",
+                ),
+                view=View().add_item(
+                    Button(
+                        style=ButtonStyle.link,
+                        label="Invite Ideograbber to a server!",
+                        url=oauth_url(
+                            cast(int, self.application_id), permissions=self.permissions
+                        ),
+                    )
+                ),
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                view=CopyAttachmentsView(self, attachments, elegible_guilds),
                 ephemeral=True,
             )
 
