@@ -1,9 +1,10 @@
+from abc import ABC, abstractmethod
 import random
 import re
 import tomllib
 
 from enum import Enum
-from typing import Sequence, cast
+from typing import Protocol, Sequence, cast
 from logging import getLogger
 from urllib.parse import urlparse
 
@@ -57,7 +58,6 @@ class ExpressionLocation(Enum):
     STICKER = "Sticker"
     STATUS = "Status"
     BIO = "Bio"
-
 
 class BaseSelect[T](Select):
     def __init__(self, **kwargs):
@@ -139,7 +139,7 @@ class GuildSelect(Select):
         await interaction.response.defer()
 
 
-class BaseCopyView[T](View):
+class BaseCopyView[T](View, ABC):
     def __init__(self, client: Client, select: BaseSelect[T], guilds: list[Guild]):
         self.client = client
         self.logger = getLogger("discord.expressioncopier")
@@ -151,10 +151,16 @@ class BaseCopyView[T](View):
         self.add_item(self.item_select)
         self.add_item(self.guild_select)
 
+    @abstractmethod
     async def copy_sticker(self, item: T, guild: Guild, username: str) -> None:
         raise NotImplementedError()
-
+    
+    @abstractmethod
     async def copy_emoji(self, item: T, guild: Guild, username: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def item_name(self, item: T) -> str:
         raise NotImplementedError()
 
     @button(label="Copy", style=ButtonStyle.primary, row=2)
@@ -195,10 +201,10 @@ class BaseCopyView[T](View):
                 Embed(
                     color=Color.brand_red(),
                     title=f"Failed to copy {len(failed)} {"expressions" if len(failed) != 1 else "expression"}",
-                    description="\n".join(
-                        f"- \\:{expression.name}\\: to {guild.name}: {error.text} ({error.code})"
+                    description="\n".join([
+                        f"- {await self.item_name(expression)} to {guild.name}: {error.text} ({error.code})"
                         for expression, guild, error in failed
-                    ),
+                    ]),
                 )
             )
         if not len(embeds):
@@ -243,6 +249,9 @@ class CopyExpressionsView(BaseCopyView[Expression]):
             reason=f"Copying emoji (requested by @{username})",
         )
 
+    async def item_name(self, item):
+        return item.name if isinstance(item, GuildSticker) else f":{item.name}:"
+
 
 class CopyAttachmentsView(BaseCopyView[Attachment]):
     def __init__(
@@ -255,6 +264,9 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
             ),
             guilds,
         )
+
+    async def copy_sticker(self, item: Attachment, guild: Guild, username: str) -> None:
+        raise Exception("Attachments should never be uploaded as stickers!")
 
     async def copy_emoji(self, item, guild, username):
         name = item.filename
@@ -269,6 +281,9 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
             image=await item.read(),
             reason=f"Uploading emoji (requested by @{username})",
         )
+
+    async def item_name(self, item: Attachment) -> str:
+        return item.filename
 
 
 class ErrorHandlingCommandTree(CommandTree):
