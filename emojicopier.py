@@ -22,6 +22,7 @@ from discord import (
     Member,
     Message,
     Emoji,
+    NotFound,
     PartialEmoji,
     Permissions,
     Role,
@@ -345,13 +346,13 @@ class EmojiCopier(Client):
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
-        # self.tree.add_command(Command(
-        #     name="server-assets",
-        #     description="Extract server branding assets",
-        #     callback=self.extract_server_assets,
-        #     allowed_contexts=AppCommandContext(guild=True, dm_channel=False, private_channel=False),
-        #     allowed_installs=AppInstallationType(guild=True, user=True)
-        # ))
+        self.tree.add_command(Command(
+            name="server-assets",
+            description="Extract server branding assets",
+            callback=self.extract_server_assets,
+            allowed_contexts=AppCommandContext(guild=True, dm_channel=False, private_channel=False),
+            allowed_installs=AppInstallationType(guild=True, user=True)
+        ))
         self.tree.add_command(
             Command(
                 name="role-icon",
@@ -569,40 +570,58 @@ class EmojiCopier(Client):
                 ),
                 ephemeral=True,
             )
-        else:
-            embed = Embed(
-                color=Color.brand_green(),
-                title=f"Assets of {guild.name}",
-            ).add_field(
-                name="Icon",
-                value=(
-                    self.format_asset_link(guild.icon)
-                    if guild.icon is not None
-                    else None
-                ),
+            return
+        elif guild not in self.guilds:
+            try:
+                guild = await self.fetch_guild_preview(guild.id)
+            except NotFound:
+                await interaction.response.send_message(
+                    embed=Embed(
+                        color=Color.brand_red(),
+                        title="This server isn't discoverable and doesn't have Ideograbber installed",
+                        description=(
+                            "User-installed bots can only see the assets (icon, banner, etc.) of servers if:\n"
+                            "1. the bot is a member of the server, or\n"
+                            "2. the server is discoverable (i.e. can be found through the Discovery tab in the app)\n"
+                            "This server satisfies neither of those criterion, so Ideograbber cannot copy its assets."
+                        ),
+                    ),
+                    ephemeral=True,
+                )
+                return
+        embed = Embed(
+            color=Color.brand_green(),
+            title=f"Assets of {guild.name}",
+        ).add_field(
+            name="Icon",
+            value=(
+                self.format_asset_link(guild.icon)
+                if guild.icon is not None
+                else None
+            ),
+            inline=False,
+        )
+        embed.set_thumbnail(url=guild.icon.url if guild.icon is not None else None)
+        if isinstance(guild, Guild) and guild.banner is not None:
+            embed.add_field(
+                name="Banner",
+                value=self.format_asset_link(guild.banner),
                 inline=False,
             )
-            embed.set_thumbnail(url=guild.icon.url if guild.icon is not None else None)
-            if guild.banner is not None:
-                embed.add_field(
-                    name="Banner",
-                    value=self.format_asset_link(guild.banner),
-                    inline=False,
-                )
-            if guild.splash is not None:
-                embed.add_field(
-                    name="Invite splash",
-                    value=self.format_asset_link(guild.splash),
-                    inline=False,
-                )
-            if guild.discovery_splash is not None:
-                embed.add_field(
-                    name="Discovery splash",
-                    value=self.format_asset_link(guild.discovery_splash),
-                    inline=False,
-                )
+        if guild.splash is not None:
+            embed.add_field(
+                name="Invite splash",
+                value=self.format_asset_link(guild.splash),
+                inline=False,
+            )
+        if guild.discovery_splash is not None:
+            embed.add_field(
+                name="Discovery splash",
+                value=self.format_asset_link(guild.discovery_splash),
+                inline=False,
+            )
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def extract_role_icon(self, interaction: Interaction, role: Role):
         await interaction.response.send_message(
