@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
+from io import BytesIO
+from math import ceil, sqrt
 import random
 import re
+from tempfile import TemporaryFile
 import tomllib
 
 from enum import Enum
-from typing import Protocol, Sequence, cast
+from typing import Sequence, cast
 from logging import getLogger
 from urllib.parse import urlparse
 
@@ -41,6 +44,7 @@ from discord.app_commands import (
 from discord.ui import View, Select, Button, button
 from discord.utils import oauth_url
 
+from PIL import Image
 from zxcvbn import zxcvbn
 
 Expression = Emoji | PartialEmoji | GuildSticker
@@ -269,6 +273,24 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
     async def copy_sticker(self, item: Attachment, guild: Guild, username: str) -> None:
         raise Exception("Attachments should never be uploaded as stickers!")
 
+    def _resize_image(
+        self, image_bytes: bytes, format: str | None, target_size: int
+    ) -> bytes:
+        # Estimate area ratio = file size ratio. If that wasn't enough, keep trying
+        # until it is.
+        while len(image_bytes) > target_size:
+            image = Image.open(BytesIO(image_bytes))
+            scale_factor = sqrt(len(image_bytes) / target_size)
+            image = image.reduce(ceil(scale_factor))
+
+            # thanks pillow
+            with TemporaryFile() as temp:
+                image.save(temp, format)
+                temp.seek(0)
+                image_bytes = temp.read()
+
+        return image_bytes
+
     async def copy_emoji(self, item, guild, username):
         name = item.filename
         if (idx := name.rfind(".")) > 0:
@@ -277,9 +299,15 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
         if len(name) < 2:
             name = "_" + name
 
+        image_bytes = self._resize_image(
+            await item.read(),
+            None if item.content_type is None else item.content_type.split("/")[-1],
+            256000,
+        )
+
         await guild.create_custom_emoji(
             name=name,
-            image=await item.read(),
+            image=image_bytes,
             reason=f"Uploading emoji (requested by @{username})",
         )
 
@@ -438,7 +466,7 @@ class EmojiCopier(Client):
 
     def format_asset_link(self, asset: Asset):
         return f"[{urlparse(asset.url).path.split("/")[-1]}]({asset.url})"
-    
+
     async def install(self, interaction: Interaction):
         await interaction.response.send_message(
             f"[click here to WIN BIG]({oauth_url(cast(int, self.application_id), permissions=self.permissions)})"

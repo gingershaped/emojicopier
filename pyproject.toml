@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.12"
 "discord.py" = { git = "https://github.com/gingershaped/discord.py", rev = "0784ab6" }
 zxcvbn = "^4.4.28"
+pillow = "^11.0.0"
 
 
 [build-system]
