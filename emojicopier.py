@@ -356,8 +356,18 @@ class EmojiCopier(Client):
         )
         self.tree.add_command(
             ContextMenu(
-                name="Extract user assets",
-                callback=self.extract_user_assets,
+                name="Copy expressions",
+                callback=self.copy_expressions,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
+        self.tree.add_command(
+            ContextMenu(
+                name="Upload attachments as emoji",
+                callback=self.copy_attachments,
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=True, private_channel=True
                 ),
@@ -374,6 +384,18 @@ class EmojiCopier(Client):
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
+
+        self.tree.add_command(
+            ContextMenu(
+                name="Extract user assets",
+                callback=self.extract_user_assets,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
+
         self.tree.add_command(Command(
             name="server-assets",
             description="Extract server branding assets",
@@ -403,7 +425,6 @@ class EmojiCopier(Client):
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
-
         # self.tree.add_command(
         #     Command(
         #         name="copy",
@@ -415,26 +436,6 @@ class EmojiCopier(Client):
         #         allowed_installs=AppInstallationType(guild=True, user=True),
         #     )
         # )
-        self.tree.add_command(
-            ContextMenu(
-                name="Copy expressions",
-                callback=self.copy_expressions,
-                allowed_contexts=AppCommandContext(
-                    guild=True, dm_channel=True, private_channel=True
-                ),
-                allowed_installs=AppInstallationType(guild=True, user=True),
-            )
-        )
-        self.tree.add_command(
-            ContextMenu(
-                name="Upload attachments as emoji",
-                callback=self.copy_attachments,
-                allowed_contexts=AppCommandContext(
-                    guild=True, dm_channel=True, private_channel=True
-                ),
-                allowed_installs=AppInstallationType(guild=True, user=True),
-            )
-        )
 
     async def setup_hook(self):
         await self.tree.sync()
