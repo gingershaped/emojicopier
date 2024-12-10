@@ -1,24 +1,25 @@
-from abc import ABC, abstractmethod
-from io import BytesIO
-from math import ceil, sqrt
 import os
 import random
 import re
-from tempfile import TemporaryFile
 import tomllib
-
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Sequence, cast
+from io import BytesIO
 from logging import getLogger
+from math import ceil, sqrt
+from tempfile import TemporaryFile
+from typing import Sequence, cast
 from urllib.parse import urlparse
 from zipfile import ZipFile
 
 from discord import (
     Asset,
     Attachment,
+    ButtonStyle,
     Client,
     Color,
     Embed,
+    Emoji,
     File,
     Guild,
     GuildSticker,
@@ -27,26 +28,23 @@ from discord import (
     Interaction,
     Member,
     Message,
-    Emoji,
     NotFound,
     PartialEmoji,
     Permissions,
     Role,
     SelectOption,
-    ButtonStyle,
     User,
 )
 from discord.app_commands import (
-    CommandTree,
-    ContextMenu,
     AppCommandContext,
+    AppCommandError,
     AppInstallationType,
     Command,
-    AppCommandError,
+    CommandTree,
+    ContextMenu,
 )
-from discord.ui import View, Select, Button, button, select, UserSelect
+from discord.ui import Button, Select, UserSelect, View, button, select
 from discord.utils import oauth_url
-
 from PIL import Image
 from yarl import URL
 from zxcvbn import zxcvbn
@@ -61,12 +59,14 @@ password_strengths = (
     ("Excellent", Color.brand_green()),
 )
 
+
 class ExpressionLocation(Enum):
     MESSAGE = None
     REACTION = "Reaction"
     STICKER = "Sticker"
     STATUS = "Status"
     BIO = "Bio"
+
 
 class BaseSelect[T](Select):
     def __init__(self, **kwargs):
@@ -163,7 +163,7 @@ class BaseCopyView[T](View, ABC):
     @abstractmethod
     async def copy_sticker(self, item: T, guild: Guild, username: str) -> None:
         raise NotImplementedError()
-    
+
     @abstractmethod
     async def copy_emoji(self, item: T, guild: Guild, username: str) -> None:
         raise NotImplementedError()
@@ -210,10 +210,12 @@ class BaseCopyView[T](View, ABC):
                 Embed(
                     color=Color.brand_red(),
                     title=f"Failed to copy {len(failed)} {"expressions" if len(failed) != 1 else "expression"}",
-                    description="\n".join([
-                        f"- {await self.item_name(expression)} to {guild.name}: {error.text} ({error.code})"
-                        for expression, guild, error in failed
-                    ]),
+                    description="\n".join(
+                        [
+                            f"- {await self.item_name(expression)} to {guild.name}: {error.text} ({error.code})"
+                            for expression, guild, error in failed
+                        ]
+                    ),
                 )
             )
         if not len(embeds):
@@ -318,6 +320,7 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
     async def item_name(self, item: Attachment) -> str:
         return item.filename
 
+
 class DumpUserAvatarsView(View):
     def __init__(self):
         super().__init__()
@@ -348,6 +351,7 @@ class DumpUserAvatarsView(View):
         await interaction.followup.send(
             file=File(buffer, filename=f"{interaction.id}.zip"), ephemeral=True
         )
+
 
 class ErrorHandlingCommandTree(CommandTree):
     async def on_error(
@@ -430,13 +434,17 @@ class EmojiCopier(Client):
             )
         )
 
-        self.tree.add_command(Command(
-            name="server-assets",
-            description="Extract server branding assets",
-            callback=self.extract_server_assets,
-            allowed_contexts=AppCommandContext(guild=True, dm_channel=False, private_channel=False),
-            allowed_installs=AppInstallationType(guild=True, user=True)
-        ))
+        self.tree.add_command(
+            Command(
+                name="server-assets",
+                description="Extract server branding assets",
+                callback=self.extract_server_assets,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=False, private_channel=False
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
         self.tree.add_command(
             Command(
                 name="role-icon",
@@ -456,7 +464,7 @@ class EmojiCopier(Client):
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=True, private_channel=True
                 ),
-                allowed_installs=AppInstallationType(guild=True, user=True)
+                allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
         self.tree.add_command(
@@ -524,10 +532,18 @@ class EmojiCopier(Client):
             embed=Embed(
                 color=password_strengths[results["score"]][1],
                 title=f"Password strength: {password_strengths[results["score"]][0]}",
-            ).add_field(
-                name="Approximate number of guesses", value=results["guesses"], inline=False
-            ).add_field(
-                name="Worst-case time to crack", value=results["crack_times_display"]["offline_fast_hashing_1e10_per_second"], inline=False
+            )
+            .add_field(
+                name="Approximate number of guesses",
+                value=results["guesses"],
+                inline=False,
+            )
+            .add_field(
+                name="Worst-case time to crack",
+                value=results["crack_times_display"][
+                    "offline_fast_hashing_1e10_per_second"
+                ],
+                inline=False,
             )
         )
 
@@ -670,9 +686,7 @@ class EmojiCopier(Client):
         ).add_field(
             name="Icon",
             value=(
-                self.format_asset_link(guild.icon)
-                if guild.icon is not None
-                else None
+                self.format_asset_link(guild.icon) if guild.icon is not None else None
             ),
             inline=False,
         )
@@ -752,7 +766,9 @@ class EmojiCopier(Client):
                     Button(
                         style=ButtonStyle.link,
                         label="Invite Ideograbber to a server!",
-                        url=oauth_url(cast(int, self.application_id), permissions=self.permissions),
+                        url=oauth_url(
+                            cast(int, self.application_id), permissions=self.permissions
+                        ),
                     )
                 ),
                 ephemeral=True,
@@ -851,7 +867,10 @@ class EmojiCopier(Client):
                         Button(
                             style=ButtonStyle.link,
                             label="Invite Ideograbber to a server!",
-                            url=oauth_url(cast(int, self.application_id), permissions=self.permissions),
+                            url=oauth_url(
+                                cast(int, self.application_id),
+                                permissions=self.permissions,
+                            ),
                         )
                     ),
                     ephemeral=True,
@@ -861,6 +880,7 @@ class EmojiCopier(Client):
         await interaction.response.send_message(
             view=DumpUserAvatarsView(), ephemeral=True
         )
+
 
 if __name__ == "__main__":
     with open("config.toml", "rb") as f:
