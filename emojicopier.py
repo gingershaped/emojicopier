@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
 from math import ceil, sqrt
+import os
 import random
 import re
 from tempfile import TemporaryFile
@@ -10,6 +11,7 @@ from enum import Enum
 from typing import Sequence, cast
 from logging import getLogger
 from urllib.parse import urlparse
+from zipfile import ZipFile
 
 from discord import (
     Asset,
@@ -17,6 +19,7 @@ from discord import (
     Client,
     Color,
     Embed,
+    File,
     Guild,
     GuildSticker,
     HTTPException,
@@ -41,10 +44,11 @@ from discord.app_commands import (
     Command,
     AppCommandError,
 )
-from discord.ui import View, Select, Button, button
+from discord.ui import View, Select, Button, button, select, UserSelect
 from discord.utils import oauth_url
 
 from PIL import Image
+from yarl import URL
 from zxcvbn import zxcvbn
 
 Expression = Emoji | PartialEmoji | GuildSticker
@@ -314,6 +318,36 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
     async def item_name(self, item: Attachment) -> str:
         return item.filename
 
+class DumpUserAvatarsView(View):
+    def __init__(self):
+        super().__init__()
+        self.selected: list[Member | User] = []
+
+    @select(cls=UserSelect, max_values=25)
+    async def select_users(self, interaction: Interaction, select: UserSelect):
+        self.selected = select.values
+        await interaction.response.defer()
+
+    @button(label="Extract", style=ButtonStyle.primary, row=2)
+    async def on_extract(self, interaction: Interaction, _: Button):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        with ZipFile(buffer := BytesIO(), "w") as archive:
+            meta = []
+            archive.comment = b":3"
+            for member in self.selected:
+                avatar = member.display_avatar
+                data = await avatar.read()
+                ext = os.path.splitext(URL(avatar.url).path)[1]
+                archive.writestr(
+                    f"{re.sub(r"[^a-zA-Z0-9_-]", "_", member.display_name)}-{member.id}{ext}",
+                    data,
+                )
+                meta.append(f"- {member.display_name} ({member.id}): {avatar.url}")
+            archive.writestr("sources.txt", "\n".join(meta))
+        buffer.seek(0)
+        await interaction.followup.send(
+            file=File(buffer, filename=f"{interaction.id}.zip"), ephemeral=True
+        )
 
 class ErrorHandlingCommandTree(CommandTree):
     async def on_error(
@@ -412,6 +446,17 @@ class EmojiCopier(Client):
                     guild=True, dm_channel=False, private_channel=False
                 ),
                 allowed_installs=AppInstallationType(guild=True, user=True),
+            )
+        )
+        self.tree.add_command(
+            Command(
+                name="dump-avatars",
+                description="Batch-download user avatars",
+                callback=self.dump_avatars,
+                allowed_contexts=AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                ),
+                allowed_installs=AppInstallationType(guild=True, user=True)
             )
         )
         self.tree.add_command(
@@ -811,6 +856,11 @@ class EmojiCopier(Client):
                     ),
                     ephemeral=True,
                 )
+
+    async def dump_avatars(self, interaction: Interaction):
+        await interaction.response.send_message(
+            view=DumpUserAvatarsView(), ephemeral=True
+        )
 
 if __name__ == "__main__":
     with open("config.toml", "rb") as f:
