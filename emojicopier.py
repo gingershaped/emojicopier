@@ -373,7 +373,7 @@ VALID_ATTACHMENT_TYPES = {"image/gif", "image/jpeg", "image/png"}
 
 class EmojiCopier(Client):
     EMOJI_REGEX = re.compile(r"<(?P<anim>a)?:(?P<name>\w{2,}):(?P<id>\d+)>")
-    permissions = Permissions(create_expressions=True, manage_expressions=True)
+    permissions = Permissions(create_expressions=True)
 
     def __init__(self):
         intents = Intents.default()
