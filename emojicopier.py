@@ -44,7 +44,6 @@ from discord.app_commands import (
     ContextMenu,
 )
 from discord.ui import Button, Select, UserSelect, View, button, select
-from discord.utils import oauth_url
 from PIL import Image
 from yarl import URL
 from zxcvbn import zxcvbn
@@ -523,7 +522,7 @@ class EmojiCopier(Client):
 
     async def install(self, interaction: Interaction):
         await interaction.response.send_message(
-            f"[click here to WIN BIG]({oauth_url(cast(int, self.application_id), permissions=self.permissions)})"
+            f"[click here to WIN BIG](https://discord.com/oauth2/authorize?client_id={cast(int, self.application_id)})"
         )
 
     async def check_password_strength(self, interaction: Interaction, message: Message):
