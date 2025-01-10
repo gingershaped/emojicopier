@@ -303,6 +303,8 @@ class CopyAttachmentsView(BaseCopyView[Attachment]):
         name = re.sub(r"\W", "_", name)
         if len(name) < 2:
             name = "_" + name
+        elif len(name) > 32:
+            name = name[:32]
 
         image_bytes = self._resize_image(
             await item.read(),
