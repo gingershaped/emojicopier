@@ -44,6 +44,7 @@ from discord.app_commands import (
     ContextMenu,
 )
 from discord.ui import Button, Select, UserSelect, View, button, select
+from discord.utils import oauth_url
 from PIL import Image
 from yarl import URL
 from zxcvbn import zxcvbn
