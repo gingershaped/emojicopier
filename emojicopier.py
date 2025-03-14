@@ -18,6 +18,7 @@ from discord import (
     ButtonStyle,
     Client,
     Color,
+    DMChannel,
     Embed,
     Emoji,
     File,
@@ -47,7 +48,6 @@ from discord.ui import Button, Select, UserSelect, View, button, select
 from discord.utils import oauth_url
 from PIL import Image
 from yarl import URL
-from zxcvbn import zxcvbn
 
 Expression = Emoji | PartialEmoji | GuildSticker
 
@@ -370,7 +370,6 @@ class EmojiCopier(Client):
 
     def __init__(self):
         intents = Intents.default()
-        intents.members = True
         super().__init__(intents=intents)
 
         self.tree = ErrorHandlingCommandTree(self)
@@ -378,7 +377,7 @@ class EmojiCopier(Client):
         self.tree.add_command(
             ContextMenu(
                 name="Extract expressions",
-                callback=self.extract_expressions,
+                callback=self.extract_expressions_command,
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=True, private_channel=True
                 ),
@@ -504,12 +503,7 @@ class EmojiCopier(Client):
     def format_asset_link(self, asset: Asset):
         return f"[{urlparse(asset.url).path.split("/")[-1]}]({asset.url})"
 
-    async def install(self, interaction: Interaction):
-        await interaction.response.send_message(
-            f"[click here to WIN BIG](https://discord.com/oauth2/authorize?client_id={cast(int, self.application_id)})"
-        )
-
-    async def extract_expressions(self, interaction: Interaction, message: Message):
+    async def extract_expressions(self, message: Message):
         body_emojis = self.emojis_in_string(message.content)
         reaction_emojis = self.reaction_emojis(message)
         embeds = []
@@ -553,15 +547,35 @@ class EmojiCopier(Client):
                 )
             )
         if len(embeds):
-            await interaction.response.send_message(embeds=embeds, ephemeral=True)
+            return embeds
         else:
-            await interaction.response.send_message(
-                embed=Embed(
-                    color=Color.brand_red(),
-                    title="This message has no emoji, reactions, or stickers.",
-                ),
-                ephemeral=True,
-            )
+            return None
+        
+    async def install(self, interaction: Interaction):
+        await interaction.response.send_message(
+            f"[click here to WIN BIG](https://discord.com/oauth2/authorize?client_id={cast(int, self.application_id)})"
+        )
+
+    async def on_message(self, message: Message):
+        if isinstance(message.channel, DMChannel) and message.author != self.user:
+            if (embeds := await self.extract_expressions(message)) is not None:
+                await message.channel.send(embeds=embeds)
+        
+    async def extract_expressions_command(self, interaction: Interaction, message: Message):
+        match await self.extract_expressions(message):
+            case list(embeds):
+                await interaction.response.send_message(
+                    embeds=embeds,
+                    ephemeral=True
+                )
+            case None:
+                await interaction.response.send_message(
+                    embed=Embed(
+                        color=Color.brand_red(),
+                        title="This message has no emoji, reactions, or stickers.",
+                    ),
+                    ephemeral=True
+                )
 
     async def extract_user_assets(self, interaction: Interaction, user: Member | User):
         full_user = await self.fetch_user(user.id)
