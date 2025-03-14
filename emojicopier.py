@@ -370,6 +370,7 @@ class EmojiCopier(Client):
 
     def __init__(self):
         intents = Intents.default()
+        intents.members = True
         super().__init__(intents=intents)
 
         self.tree = ErrorHandlingCommandTree(self)
