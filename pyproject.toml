@@ -8,7 +8,6 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 "discord.py" = "^2.5.2"
-zxcvbn = "^4.4.28"
 pillow = "^11.0.0"
 
 

@@ -717,18 +717,7 @@ idna = ">=2.0"
 multidict = ">=4.0"
 propcache = ">=0.2.0"
 
-[[package]]
-name = "zxcvbn"
-version = "4.5.0"
-description = ""
-optional = false
-python-versions = "*"
-files = [
-    {file = "zxcvbn-4.5.0-py2.py3-none-any.whl", hash = "sha256:2b6eed621612ce6d65e6e4c7455b966acee87d0280e257956b1f06ccc66bd5ff"},
-    {file = "zxcvbn-4.5.0.tar.gz", hash = "sha256:70392c0fff39459d7f55d0211151401e79e76fcc6e2c22b61add62900359c7c1"},
-]
-
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "7c1470f4c76b03e326855d41be0d11fc870f6134d2a004c2ebbaad58033f2194"
+content-hash = "50495c67c6a0607aa10a71a74c0a393ee5bc7a8e37db9a0bd530addc8139dfe9"

@@ -51,15 +51,6 @@ from zxcvbn import zxcvbn
 
 Expression = Emoji | PartialEmoji | GuildSticker
 
-password_strengths = (
-    ("Terrible", Color.brand_red()),
-    ("Poor", Color.brand_red()),
-    ("Okay", Color.yellow()),
-    ("Good", Color.brand_green()),
-    ("Excellent", Color.brand_green()),
-)
-
-
 class ExpressionLocation(Enum):
     MESSAGE = None
     REACTION = "Reaction"
@@ -414,16 +405,6 @@ class EmojiCopier(Client):
                 allowed_installs=AppInstallationType(guild=True, user=True),
             )
         )
-        self.tree.add_command(
-            ContextMenu(
-                name="Check password strength",
-                callback=self.check_password_strength,
-                allowed_contexts=AppCommandContext(
-                    guild=True, dm_channel=True, private_channel=True
-                ),
-                allowed_installs=AppInstallationType(guild=True, user=True),
-            )
-        )
 
         self.tree.add_command(
             ContextMenu(
@@ -526,27 +507,6 @@ class EmojiCopier(Client):
     async def install(self, interaction: Interaction):
         await interaction.response.send_message(
             f"[click here to WIN BIG](https://discord.com/oauth2/authorize?client_id={cast(int, self.application_id)})"
-        )
-
-    async def check_password_strength(self, interaction: Interaction, message: Message):
-        results = zxcvbn(message.content)
-        await interaction.response.send_message(
-            embed=Embed(
-                color=password_strengths[results["score"]][1],
-                title=f"Password strength: {password_strengths[results["score"]][0]}",
-            )
-            .add_field(
-                name="Approximate number of guesses",
-                value=results["guesses"],
-                inline=False,
-            )
-            .add_field(
-                name="Worst-case time to crack",
-                value=results["crack_times_display"][
-                    "offline_fast_hashing_1e10_per_second"
-                ],
-                inline=False,
-            )
         )
 
     async def extract_expressions(self, interaction: Interaction, message: Message):
