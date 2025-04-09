@@ -650,7 +650,7 @@ class EmojiCopier(Client):
                             "User-installed bots can only see the assets (icon, banner, etc.) of servers if:\n"
                             "1. the bot is a member of the server, or\n"
                             "2. the server is discoverable (i.e. can be found through the Discovery tab in the app).\n"
-                            "This server is not discoverable, and Ideograbbe is not installed,"
+                            "This server is not discoverable, and Ideograbber is not installed,"
                             "so Ideograbber cannot copy its assets."
                         ),
                     ),
