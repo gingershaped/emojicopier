@@ -8,7 +8,7 @@ from io import BytesIO
 from logging import getLogger
 from math import ceil, sqrt
 from tempfile import TemporaryFile
-from typing import Sequence, cast
+from typing import Collection, Sequence, cast
 from urllib.parse import urlparse
 from zipfile import ZipFile
 
@@ -49,7 +49,7 @@ from discord.utils import oauth_url
 from PIL import Image
 from yarl import URL
 
-Expression = Emoji | PartialEmoji | GuildSticker
+type Expression = Emoji | PartialEmoji | GuildSticker
 
 class ExpressionLocation(Enum):
     MESSAGE = None
@@ -350,7 +350,7 @@ class ErrorHandlingCommandTree(CommandTree):
     async def on_error(
         self, interaction: Interaction[Client], error: AppCommandError
     ) -> None:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=Embed(
                 color=Color.brand_red(),
                 title="Catastrophic failure",
@@ -504,38 +504,63 @@ class EmojiCopier(Client):
     def format_asset_link(self, asset: Asset):
         return f"[{urlparse(asset.url).path.split("/")[-1]}]({asset.url})"
 
-    async def extract_expressions(self, message: Message):
+    class ExpressionEmbeds:
+        def __init__(self, client: Client):
+            self.client = client
+            self._emoji: list[Emoji] = []
+            self._embeds: list[Embed] = []
+
+        def add_embed(self, embed: Embed):
+            self._embeds.append(embed)
+            
+        async def upload(self, emoji: Emoji | PartialEmoji):
+            uploaded_emoji = await self.client.create_application_emoji(name=str(emoji.id), image=await emoji.read())
+            self._emoji.append(uploaded_emoji)
+            return uploaded_emoji
+        
+        async def add_emoji_embed(self, emojis: Collection[Emoji | PartialEmoji], title: str):
+            description = []
+            for original_emoji in emojis:
+                uploaded_emoji = await self.upload(original_emoji)
+                description.append(f"- {str(uploaded_emoji)} [{original_emoji.name}]({original_emoji.url})")
+
+            self.add_embed(
+                Embed(
+                    color=Color.brand_green(),
+                    title=title,
+                    description="\n".join(description),
+                )
+            )
+        
+        async def __aenter__(self):
+            return self._embeds
+
+        async def __aexit__(self, *_):
+            for emoji in self._emoji:
+                await emoji.delete()
+
+    async def create_expression_embeds(self, message: Message):
+        embeds = EmojiCopier.ExpressionEmbeds(self)
         body_emojis = self.emojis_in_string(message.content)
         reaction_emojis = self.reaction_emojis(message)
-        embeds = []
+        stickers = message.stickers
+
+        for snapshot in message.message_snapshots:
+            body_emojis.update(self.emojis_in_string(snapshot.content))
+            stickers.extend(snapshot.stickers)
+
         if len(body_emojis):
-            embeds.append(
-                Embed(
-                    color=Color.brand_green(),
-                    title=f"{len(body_emojis)} {"emojis" if len(body_emojis) != 1 else "emoji"} in message content",
-                    description="\n".join(
-                        [
-                            f"- {str(emoji)} [{emoji.name}]({emoji.url})"
-                            for emoji in body_emojis
-                        ]
-                    ),
-                )
+            await embeds.add_emoji_embed(
+                body_emojis,
+                f"{len(body_emojis)} {"emojis" if len(body_emojis) != 1 else "emoji"} in message content"
             )
         if len(reaction_emojis):
-            embeds.append(
-                Embed(
-                    color=Color.brand_green(),
-                    title=f"{len(reaction_emojis)} {"reactions" if len(reaction_emojis) != 1 else "reaction"}",
-                    description="\n".join(
-                        [
-                            f"- {str(emoji)} [{emoji.name}]({emoji.url})"
-                            for emoji in reaction_emojis
-                        ]
-                    ),
-                )
+            await embeds.add_emoji_embed(
+                reaction_emojis,
+                f"{len(reaction_emojis)} {"reactions" if len(reaction_emojis) != 1 else "reaction"}"
             )
-        if len(message.stickers):
-            embeds.append(
+        if len(stickers):
+            embeds.add_embed(
                 Embed(
                     color=Color.brand_green(),
                     title=f"{len(message.stickers)} {"stickers" if len(message.stickers) != 1 else "sticker"}",
@@ -547,10 +572,8 @@ class EmojiCopier(Client):
                     ),
                 )
             )
-        if len(embeds):
-            return embeds
-        else:
-            return None
+
+        return embeds
         
     async def install(self, interaction: Interaction):
         await interaction.response.send_message(
@@ -559,18 +582,20 @@ class EmojiCopier(Client):
 
     async def on_message(self, message: Message):
         if isinstance(message.channel, DMChannel) and message.author != self.user:
-            if (embeds := await self.extract_expressions(message)) is not None:
-                await message.channel.send(embeds=embeds)
+            async with await self.create_expression_embeds(message) as embeds:
+                if len(embeds):
+                    await message.channel.send(embeds=embeds)
         
     async def extract_expressions_command(self, interaction: Interaction, message: Message):
-        match await self.extract_expressions(message):
-            case list(embeds):
-                await interaction.response.send_message(
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        async with await self.create_expression_embeds(message) as embeds:
+            if len(embeds):
+                await interaction.followup.send(
                     embeds=embeds,
                     ephemeral=True
                 )
-            case None:
-                await interaction.response.send_message(
+            else:
+                await interaction.followup.send(
                     embed=Embed(
                         color=Color.brand_red(),
                         title="This message has no emoji, reactions, or stickers.",
