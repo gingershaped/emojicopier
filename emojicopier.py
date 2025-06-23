@@ -378,7 +378,7 @@ class EmojiCopier(Client):
         self.tree.add_command(
             ContextMenu(
                 name="Extract expressions",
-                callback=self.extract_expressions_command,
+                callback=self.extract_expressions,
                 allowed_contexts=AppCommandContext(
                     guild=True, dm_channel=True, private_channel=True
                 ),
@@ -585,23 +585,6 @@ class EmojiCopier(Client):
             async with await self.create_expression_embeds(message) as embeds:
                 if len(embeds):
                     await message.channel.send(embeds=embeds)
-        
-    async def extract_expressions_command(self, interaction: Interaction, message: Message):
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        async with await self.create_expression_embeds(message) as embeds:
-            if len(embeds):
-                await interaction.followup.send(
-                    embeds=embeds,
-                    ephemeral=True
-                )
-            else:
-                await interaction.followup.send(
-                    embed=Embed(
-                        color=Color.brand_red(),
-                        title="This message has no emoji, reactions, or stickers.",
-                    ),
-                    ephemeral=True
-                )
 
     async def extract_user_assets(self, interaction: Interaction, user: Member | User):
         full_user = await self.fetch_user(user.id)
@@ -730,20 +713,44 @@ class EmojiCopier(Client):
             ephemeral=True,
         )
 
+    async def extract_expressions(self, interaction: Interaction, message: Message):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        async with await self.create_expression_embeds(message) as embeds:
+            if len(embeds):
+                await interaction.followup.send(
+                    embeds=embeds,
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    embed=Embed(
+                        color=Color.brand_red(),
+                        title="This message has no emoji, reactions, or stickers.",
+                    ),
+                    ephemeral=True
+                )
+
     async def copy_expressions(self, interaction: Interaction, message: Message):
         body_emojis = self.emojis_in_string(message.content)
         reaction_emojis = self.reaction_emojis(message)
+        stickers = message.stickers
+
+        for snapshot in message.message_snapshots:
+            body_emojis.update(self.emojis_in_string(snapshot.content))
+            stickers.extend(snapshot.stickers)
+
         expressions: list[tuple[Expression, ExpressionLocation]] = list(
             {(emoji, ExpressionLocation.MESSAGE) for emoji in body_emojis}
             | {(emoji, ExpressionLocation.REACTION) for emoji in reaction_emojis}
             | {
                 (sticker, ExpressionLocation.STICKER)
                 async for sticker in (
-                    await sticker.fetch() for sticker in message.stickers
+                    await sticker.fetch() for sticker in stickers
                 )
                 if isinstance(sticker, GuildSticker)
             }
         )
+
         elegible_guilds = list(self.elegible_guilds_for_user(interaction.user))
         if not len(expressions):
             await interaction.response.send_message(
