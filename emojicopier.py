@@ -737,7 +737,7 @@ class EmojiCopier(Client):
 
     async def copy_expressions(self, interaction: Interaction, message: Message):
         body_emojis = self.emojis_in_string(message.content)
-        reaction_emojis = self.reaction_emojis(message)
+        reaction_emojis = self.reaction_emojis(message).difference(body_emojis)
         stickers = message.stickers
 
         for snapshot in message.message_snapshots:
