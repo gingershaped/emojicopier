@@ -476,7 +476,7 @@ class EmojiCopier(Client):
     async def setup_hook(self):
         await self.tree.sync()
 
-    def emojis_in_string(self, string: str):
+    def emojis_in_string(self, string: str) -> set[PartialEmoji]:
         return {
             PartialEmoji.with_state(
                 self._get_state(),
@@ -487,9 +487,9 @@ class EmojiCopier(Client):
             for match in EmojiCopier.EMOJI_REGEX.finditer(string)
         }
 
-    def reaction_emojis(self, message: Message):
+    def reaction_emojis(self, message: Message) -> set[PartialEmoji]:
         return {
-            reaction.emoji
+            reaction.emoji._to_partial()
             for reaction in message.reactions
             if isinstance(reaction.emoji, (Emoji, PartialEmoji))
             and reaction.emoji.id is not None
@@ -738,6 +738,7 @@ class EmojiCopier(Client):
     async def copy_expressions(self, interaction: Interaction, message: Message):
         body_emojis = self.emojis_in_string(message.content)
         reaction_emojis = self.reaction_emojis(message).difference(body_emojis)
+        print(body_emojis, self.reaction_emojis(message))
         stickers = message.stickers
 
         for snapshot in message.message_snapshots:
