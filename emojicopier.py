@@ -514,7 +514,11 @@ class EmojiCopier(Client):
             self._embeds.append(embed)
             
         async def upload(self, emoji: Emoji | PartialEmoji):
-            uploaded_emoji = await self.client.create_application_emoji(name=str(emoji.id), image=await emoji.read())
+            try:
+                uploaded_emoji = await self.client.create_application_emoji(name=str(emoji.id), image=await emoji.read())
+            except HTTPException:
+                # don't fail outright
+                return None
             self._emoji.append(uploaded_emoji)
             return uploaded_emoji
         
@@ -522,7 +526,8 @@ class EmojiCopier(Client):
             description = []
             for original_emoji in emojis:
                 uploaded_emoji = await self.upload(original_emoji)
-                description.append(f"- {str(uploaded_emoji)} [{original_emoji.name}]({original_emoji.url})")
+                emoji_text = str(uploaded_emoji) if uploaded_emoji is not None else f":{original_emoji.name}:"
+                description.append(f"- {emoji_text} [{original_emoji.name}]({original_emoji.url})")
 
             self.add_embed(
                 Embed(
